@@ -7,8 +7,16 @@
 
 set -euo pipefail
 
-TURN_DOMAIN="${TURN_DOMAIN:-turn.yourdomain.com}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+# Source .env for TURN_DOMAIN (docker-compose reads it, but shell doesn't)
+if [ -f "${SCRIPT_DIR}/.env" ]; then
+    set -a
+    source "${SCRIPT_DIR}/.env"
+    set +a
+fi
+
+TURN_DOMAIN="${TURN_DOMAIN:-turn.yourdomain.com}"
 CERT_DIR="${SCRIPT_DIR}/certs"
 
 # Caddy cert storage (default path for system-installed Caddy)
