@@ -36,12 +36,20 @@ app.get('/turn-credentials', (req, res) => {
   const credential = hmac.digest('base64');
 
   res.json({
-    iceServers: [{
-      urls: `turns:${TURN_DOMAIN}:${TURN_PORT}?transport=tcp`,
-      username,
-      credential,
-    }],
-    iceTransportPolicy: 'relay',
+    iceServers: [
+      // Public STUN servers — free, enables direct peer-to-peer when not blocked
+      { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
+      // TURN relay — required for UAE/restricted networks (TLS disguises as HTTPS)
+      {
+        urls: [
+          `turns:${TURN_DOMAIN}:${TURN_PORT}?transport=tcp`,
+          `turn:${TURN_DOMAIN}:${TURN_PORT}?transport=tcp`,
+        ],
+        username,
+        credential,
+      },
+    ],
+    // Don't force relay — WebRTC tries direct first, falls back to TURN automatically
   });
 });
 

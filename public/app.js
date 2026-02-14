@@ -182,13 +182,27 @@ function createPeer(peerId, isOfferer) {
     // ICE candidates → send to remote
     pc.onicecandidate = (e) => {
         if (e.candidate) {
+            console.log(`[ICE] candidate for ${peerId.slice(0, 4)}: ${e.candidate.type} ${e.candidate.protocol} ${e.candidate.address}:${e.candidate.port}`);
             send({ type: 'ice-candidate', target: peerId, candidate: e.candidate });
+        } else {
+            console.log(`[ICE] gathering complete for ${peerId.slice(0, 4)}`);
         }
+    };
+
+    // ICE connection state — the actual connectivity check
+    pc.oniceconnectionstatechange = () => {
+        console.log(`[ICE] ${peerId.slice(0, 4)} ice-connection: ${pc.iceConnectionState}`);
+    };
+
+    // ICE gathering state
+    pc.onicegatheringstatechange = () => {
+        console.log(`[ICE] ${peerId.slice(0, 4)} gathering: ${pc.iceGatheringState}`);
     };
 
     // Connection state feedback
     pc.onconnectionstatechange = () => {
         const state = pc.connectionState;
+        console.log(`[ICE] ${peerId.slice(0, 4)} connection: ${state}`);
         if (state === 'connecting') {
             showToast('Finding secure relay path…');
         } else if (state === 'connected') {
@@ -206,6 +220,7 @@ function createPeer(peerId, isOfferer) {
 
     // Remote tracks → add video element
     pc.ontrack = (e) => {
+        console.log(`[ICE] ${peerId.slice(0, 4)} received remote track: ${e.track.kind}`);
         const [remoteStream] = e.streams;
         if (!document.getElementById(`video-${peerId}`)) {
             addVideoElement(peerId, remoteStream);
