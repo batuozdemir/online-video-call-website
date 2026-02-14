@@ -110,6 +110,7 @@ async function joinRoom() {
         room.classList.remove('hidden');
         setLoading(false);
         showToast('Connected to room');
+        updateLayout();
     };
 
     ws.onmessage = (e) => handleSignaling(JSON.parse(e.data));
@@ -299,6 +300,7 @@ function removePeer(peerId) {
     }
     const wrapper = document.getElementById(`wrapper-${peerId}`);
     if (wrapper) wrapper.remove();
+    updateLayout();
 }
 
 // ── DataChannel (Chat) ─────────────────────────
@@ -431,6 +433,13 @@ function leaveRoom() {
     btnMic.querySelector('.icon-mic-off').classList.add('hidden');
     btnCamera.querySelector('.icon-cam').classList.remove('hidden');
     btnCamera.querySelector('.icon-cam-off').classList.add('hidden');
+    videoGrid.classList.remove('layout-solo', 'layout-pip', 'layout-grid');
+    pipDragSetup = false;
+    const localWrapper = document.getElementById('local-wrapper');
+    if (localWrapper) {
+        localWrapper.style.right = '';
+        localWrapper.style.bottom = '';
+    }
     passwordInput.value = '';
     passwordInput.focus();
 }
@@ -459,6 +468,74 @@ function addVideoElement(peerId, stream) {
 
     // Force play (autoplay policy)
     video.play().catch(() => { });
+
+    updateLayout();
+}
+
+// ── Layout Switching ───────────────────────────
+// Dynamically switch layout based on participant count:
+//   1 person  → solo   (centered self-view)
+//   2 people  → pip    (FaceTime: remote fullscreen, local small corner)
+//   3+ people → grid   (Zoom/Teams grid)
+function updateLayout() {
+    const totalParticipants = peers.size + 1; // +1 for self
+
+    videoGrid.classList.remove('layout-solo', 'layout-pip', 'layout-grid');
+
+    if (totalParticipants === 1) {
+        videoGrid.classList.add('layout-solo');
+    } else if (totalParticipants === 2) {
+        videoGrid.classList.add('layout-pip');
+        // Ensure local wrapper is last (so it overlays on top)
+        const localWrapper = document.getElementById('local-wrapper');
+        if (localWrapper && localWrapper !== videoGrid.lastElementChild) {
+            videoGrid.appendChild(localWrapper);
+        }
+        setupPipDrag();
+    } else {
+        videoGrid.classList.add('layout-grid');
+    }
+}
+
+// ── PiP Drag Support ───────────────────────────
+let pipDragSetup = false;
+function setupPipDrag() {
+    const localWrapper = document.getElementById('local-wrapper');
+    if (!localWrapper || pipDragSetup) return;
+    pipDragSetup = true;
+
+    let isDragging = false;
+    let startX = 0, startY = 0;
+    let origRight = 0, origBottom = 0;
+
+    const onPointerDown = (e) => {
+        if (!videoGrid.classList.contains('layout-pip')) return;
+        isDragging = true;
+        startX = e.clientX;
+        startY = e.clientY;
+        const rect = localWrapper.getBoundingClientRect();
+        const parentRect = videoGrid.getBoundingClientRect();
+        origRight = parentRect.right - rect.right;
+        origBottom = parentRect.bottom - rect.bottom;
+        localWrapper.setPointerCapture(e.pointerId);
+        e.preventDefault();
+    };
+
+    const onPointerMove = (e) => {
+        if (!isDragging) return;
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+        localWrapper.style.right = `${origRight - dx}px`;
+        localWrapper.style.bottom = `${origBottom - dy}px`;
+    };
+
+    const onPointerUp = () => {
+        isDragging = false;
+    };
+
+    localWrapper.addEventListener('pointerdown', onPointerDown);
+    localWrapper.addEventListener('pointermove', onPointerMove);
+    localWrapper.addEventListener('pointerup', onPointerUp);
 }
 
 // ── Helpers ────────────────────────────────────

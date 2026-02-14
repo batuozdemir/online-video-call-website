@@ -189,7 +189,7 @@ body {
   position: relative;
 }
 
-/* ── Video Grid ────────────────────────────────── */
+/* ── Video Grid (base) ─────────────────────────── */
 #video-grid {
   flex: 1;
   display: grid;
@@ -198,6 +198,7 @@ body {
   padding: 12px;
   overflow-y: auto;
   align-content: center;
+  position: relative;
 }
 
 .video-wrapper {
@@ -206,7 +207,7 @@ body {
   overflow: hidden;
   background: var(--surface);
   border: 1px solid var(--border);
-  aspect-ratio: 16 / 9;
+  aspect-ratio: 9 / 16;
   animation: fadeIn 0.35s ease-out;
 }
 
@@ -248,15 +249,101 @@ body {
   pointer-events: none;
 }
 
-/* Single participant: larger display */
-#video-grid:has(.video-wrapper:only-child) {
+/* ── Solo: single participant centered ──────────── */
+#video-grid.layout-solo {
   grid-template-columns: 1fr;
+  place-items: center;
 }
 
-#video-grid:has(.video-wrapper:only-child) .video-wrapper {
-  max-width: 800px;
-  margin: 0 auto;
+#video-grid.layout-solo .video-wrapper {
+  max-width: 400px;
   width: 100%;
+}
+
+/* ── PiP: FaceTime-style 1:1 ───────────────────── */
+#video-grid.layout-pip {
+  display: block;
+  padding: 0;
+  overflow: hidden;
+}
+
+/* Remote video fills entire area */
+#video-grid.layout-pip .video-wrapper:not(#local-wrapper) {
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
+  border: none;
+  aspect-ratio: auto;
+  animation: none;
+}
+
+/* Local video becomes PiP overlay */
+#video-grid.layout-pip #local-wrapper {
+  position: absolute;
+  bottom: 20px;
+  right: 20px;
+  width: 120px;
+  height: 160px;
+  aspect-ratio: auto;
+  border-radius: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  z-index: 10;
+  animation: pipIn 0.4s ease-out;
+  cursor: grab;
+  transition: box-shadow 0.2s;
+}
+
+#video-grid.layout-pip #local-wrapper:hover {
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.7);
+}
+
+#video-grid.layout-pip #local-wrapper:active {
+  cursor: grabbing;
+}
+
+#video-grid.layout-pip #local-wrapper .video-label {
+  display: none;
+}
+
+@keyframes pipIn {
+  from {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* ── Grid: Zoom/Teams-style 3+ ─────────────────── */
+#video-grid.layout-grid {
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 8px;
+  align-content: center;
+}
+
+#video-grid.layout-grid .video-wrapper {
+  aspect-ratio: 16 / 9;
+  max-height: 45vh;
+}
+
+#video-grid.layout-grid #local-wrapper {
+  position: relative;
+  bottom: auto;
+  right: auto;
+  width: auto;
+  height: auto;
+  border: 1px solid var(--border);
+  box-shadow: none;
+  border-radius: var(--radius);
+  cursor: default;
+}
+
+#video-grid.layout-grid #local-wrapper .video-label {
+  display: block;
 }
 
 /* ── Controls ──────────────────────────────────── */
@@ -538,6 +625,19 @@ body {
     border-radius: var(--radius-sm);
   }
 
+  #video-grid.layout-pip #local-wrapper {
+    width: 100px;
+    height: 140px;
+    bottom: 14px;
+    right: 14px;
+    border-radius: 12px;
+  }
+
+  #video-grid.layout-grid .video-wrapper {
+    aspect-ratio: 16 / 9;
+    max-height: none;
+  }
+
   #controls {
     gap: 10px;
     padding: 12px;
@@ -566,8 +666,15 @@ body {
 }
 
 @media (max-width: 480px) {
-  #video-grid {
-    grid-template-columns: 1fr;
+  #video-grid.layout-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  #video-grid.layout-pip #local-wrapper {
+    width: 90px;
+    height: 120px;
+    bottom: 10px;
+    right: 10px;
   }
 
   .ctrl-btn {
