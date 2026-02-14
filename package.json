@@ -1,0 +1,14 @@
+{
+  "name": "relay-call",
+  "version": "1.0.0",
+  "description": "Self-hosted video/audio calling optimized for restrictive networks",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "ws": "^8.18.0"
+  }
+}

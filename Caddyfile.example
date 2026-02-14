@@ -1,0 +1,18 @@
+# Example Caddyfile — add this block to your existing Caddyfile
+#
+# 1. Replace "call.yourdomain.com" with your actual domain
+# 2. Replace "turn.yourdomain.com" with your TURN subdomain
+# 3. Reload Caddy:  sudo systemctl reload caddy
+
+# ── Web App ────────────────────────────────────
+call.yourdomain.com {
+    reverse_proxy localhost:3000
+}
+
+# ── TURN cert provisioning ─────────────────────
+# Caddy auto-provisions the TLS cert for the TURN domain.
+# We serve a dummy response; the cert is what matters.
+# After Caddy provisions the cert, run ./copy-certs.sh
+turn.yourdomain.com {
+    respond "OK" 200
+}
