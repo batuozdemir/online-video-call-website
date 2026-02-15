@@ -10,21 +10,46 @@ const ROOM_PASSWORD = process.env.ROOM_PASSWORD || 'changeme';
 const TURN_SECRET = process.env.TURN_SECRET || 'turn-secret';
 const TURN_DOMAIN = process.env.TURN_DOMAIN || 'turn.localhost';
 const TURN_PORT = process.env.TURN_PORT || '5349';
+const TOKEN_SECRET = process.env.TOKEN_SECRET || crypto.randomBytes(32).toString('hex');
+
+// ── Auth Helpers ──────────────────────────────
+function generateToken(password) {
+  return crypto.createHmac('sha256', TOKEN_SECRET).update(password).digest('hex');
+}
+
+function isAuthorized(query) {
+  // query can be URLSearchParams (.get) or plain object (Express req.query)
+  const get = (key) => (typeof query.get === 'function' ? query.get(key) : query[key]);
+  const password = get('password');
+  const token = get('token');
+  if (password === ROOM_PASSWORD) return true;
+  if (token && token === generateToken(ROOM_PASSWORD)) return true;
+  return false;
+}
 
 // ── Express ───────────────────────────────────
 const app = express();
 const server = http.createServer(app);
 
 app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.json());
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', users: clients.size });
 });
 
+// Authenticate and return a persistent token
+app.post('/auth', (req, res) => {
+  const { password } = req.body;
+  if (password !== ROOM_PASSWORD) {
+    return res.status(401).json({ error: 'Invalid password' });
+  }
+  res.json({ token: generateToken(ROOM_PASSWORD) });
+});
+
 // Generate time-limited TURN credentials (HMAC-based, matches coturn use-auth-secret)
 app.get('/turn-credentials', (req, res) => {
-  const password = req.query.password;
-  if (password !== ROOM_PASSWORD) {
+  if (!isAuthorized(req.query)) {
     return res.status(401).json({ error: 'Invalid password' });
   }
 
@@ -59,9 +84,8 @@ const clients = new Map(); // id → WebSocket
 
 server.on('upgrade', (request, socket, head) => {
   const url = new URL(request.url, `http://${request.headers.host}`);
-  const password = url.searchParams.get('password');
 
-  if (password !== ROOM_PASSWORD) {
+  if (!isAuthorized(url.searchParams)) {
     socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
     socket.destroy();
     return;

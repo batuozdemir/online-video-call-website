@@ -11,10 +11,14 @@ let iceConfig = null;
 let myId = null;
 /** @type {string} */
 let password = '';
+/** @type {string|null} */
+let authToken = localStorage.getItem('relay-auth-token');
 let micEnabled = true;
 let camEnabled = true;
 let chatOpen = false;
 let unreadCount = 0;
+
+const AUTH_TOKEN_KEY = 'relay-auth-token';
 
 // ── DOM ────────────────────────────────────────
 const $ = (s) => document.getElementById(s);
@@ -45,6 +49,12 @@ passwordInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') joinRoom();
 });
 
+// ── Auto-join if remembered ────────────────────
+if (authToken) {
+    // Small delay to let the DOM settle
+    setTimeout(() => joinRoom(), 100);
+}
+
 // ── Control Events ─────────────────────────────
 btnMic.addEventListener('click', toggleMic);
 btnCamera.addEventListener('click', toggleCamera);
@@ -59,7 +69,9 @@ chatInput.addEventListener('keydown', (e) => {
 // ── Join Room ──────────────────────────────────
 async function joinRoom() {
     password = passwordInput.value.trim();
-    if (!password) {
+
+    // If no password typed and no saved token, ask for password
+    if (!password && !authToken) {
         showError('Please enter the room password');
         return;
     }
@@ -67,11 +79,21 @@ async function joinRoom() {
     setLoading(true);
     hideError();
 
-    // 1. Fetch TURN credentials (also validates password)
+    // Build auth query param (prefer token if available)
+    const authParam = authToken
+        ? `token=${encodeURIComponent(authToken)}`
+        : `password=${encodeURIComponent(password)}`;
+
+    // 1. Fetch TURN credentials (also validates auth)
     try {
-        const res = await fetch(`/turn-credentials?password=${encodeURIComponent(password)}`);
+        const res = await fetch(`/turn-credentials?${authParam}`);
         if (!res.ok) {
-            throw new Error(res.status === 401 ? 'Wrong password' : 'Server error');
+            if (res.status === 401) {
+                // Token might be stale — clear it and ask for password
+                clearSavedToken();
+                throw new Error('Wrong password');
+            }
+            throw new Error('Server error');
         }
         iceConfig = await res.json();
     } catch (e) {
@@ -80,7 +102,25 @@ async function joinRoom() {
         return;
     }
 
-    // 2. Get local media
+    // 2. If authed via password, get a persistent token and save it
+    if (password && !authToken) {
+        try {
+            const tokenRes = await fetch('/auth', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password }),
+            });
+            if (tokenRes.ok) {
+                const data = await tokenRes.json();
+                authToken = data.token;
+                localStorage.setItem(AUTH_TOKEN_KEY, authToken);
+            }
+        } catch {
+            // Non-critical — they just won't be remembered
+        }
+    }
+
+    // 3. Get local media
     try {
         localStream = await navigator.mediaDevices.getUserMedia({
             video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
@@ -101,9 +141,12 @@ async function joinRoom() {
         }
     }
 
-    // 3. Connect WebSocket
+    // 4. Connect WebSocket
     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    ws = new WebSocket(`${proto}//${location.host}/ws?password=${encodeURIComponent(password)}`);
+    const wsAuthParam = authToken
+        ? `token=${encodeURIComponent(authToken)}`
+        : `password=${encodeURIComponent(password)}`;
+    ws = new WebSocket(`${proto}//${location.host}/ws?${wsAuthParam}`);
 
     ws.onopen = () => {
         lobby.classList.add('hidden');
@@ -117,6 +160,7 @@ async function joinRoom() {
 
     ws.onclose = (e) => {
         if (e.code === 1006 || e.code === 4001) {
+            clearSavedToken();
             showError('Connection rejected — wrong password?');
         }
         leaveRoom();
@@ -441,7 +485,9 @@ function leaveRoom() {
         localWrapper.style.bottom = '';
     }
     passwordInput.value = '';
-    passwordInput.focus();
+    if (!authToken) {
+        passwordInput.focus();
+    }
 }
 
 // ── Video Grid ─────────────────────────────────
@@ -576,4 +622,9 @@ function escapeHtml(str) {
     const div = document.createElement('div');
     div.textContent = str;
     return div.innerHTML;
+}
+
+function clearSavedToken() {
+    authToken = null;
+    localStorage.removeItem(AUTH_TOKEN_KEY);
 }
